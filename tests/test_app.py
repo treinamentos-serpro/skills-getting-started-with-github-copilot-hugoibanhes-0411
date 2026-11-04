@@ -51,3 +51,50 @@ def test_signup_rejects_unknown_activity(client):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}
+
+
+def test_unregister_removes_only_selected_activity_signup(client):
+    email = app.activities["Chess Club"]["participants"][0]
+    participants_before = app.activities["Chess Club"]["participants"].copy()
+    client.post("/activities/Programming Class/signup", params={"email": email})
+
+    response = client.delete(
+        "/activities/Chess Club/unregister", params={"email": email})
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Inscrição cancelada com sucesso"}
+    assert app.activities["Chess Club"]["participants"] == [
+        participant for participant in participants_before if participant != email]
+    assert email in app.activities["Programming Class"]["participants"]
+    assert client.post(
+        "/activities/Chess Club/signup", params={"email": email}).status_code == 200
+
+
+def test_unregister_rejects_unknown_activity(client):
+    response = client.delete(
+        "/activities/Unknown/unregister", params={"email": "student@mergington.edu"})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+def test_unregister_rejects_unknown_participant(client):
+    activities_before = deepcopy(app.activities)
+
+    response = client.delete(
+        "/activities/Chess Club/unregister", params={"email": "unknown@mergington.edu"})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Participante não cadastrado na atividade"}
+    assert app.activities == activities_before
+
+
+def test_unregister_rejects_repeated_removal(client):
+    email = app.activities["Chess Club"]["participants"][0]
+    endpoint = "/activities/Chess Club/unregister"
+    assert client.delete(endpoint, params={"email": email}).status_code == 200
+
+    response = client.delete(endpoint, params={"email": email})
+
+    assert response.status_code == 404
+    assert email not in app.activities["Chess Club"]["participants"]

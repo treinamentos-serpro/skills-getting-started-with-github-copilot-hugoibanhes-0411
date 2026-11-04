@@ -4,6 +4,31 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  async function unregisterParticipant(activity, email, button) {
+    button.disabled = true;
+
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" }
+      );
+      const result = await response.json();
+      messageDiv.textContent = result.message || result.detail || "Não foi possível cancelar a inscrição.";
+      messageDiv.className = response.ok ? "success" : "error";
+
+      if (response.ok) {
+        await fetchActivities();
+      }
+    } catch (error) {
+      messageDiv.textContent = "Não foi possível cancelar a inscrição. Tente novamente.";
+      messageDiv.className = "error";
+    } finally {
+      button.disabled = false;
+      messageDiv.classList.remove("hidden");
+      setTimeout(() => messageDiv.classList.add("hidden"), 5000);
+    }
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -12,6 +37,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      const selectedActivity = activitySelect.value;
+      activitySelect.length = 1;
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -27,6 +54,50 @@ document.addEventListener("DOMContentLoaded", () => {
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
         `;
 
+        const participantsSection = document.createElement("div");
+        participantsSection.className = "activity-participants";
+
+        const participantsHeading = document.createElement("h5");
+        participantsHeading.textContent = `Participantes (${details.participants.length})`;
+        participantsSection.appendChild(participantsHeading);
+
+        if (details.participants.length > 0) {
+          const participantsList = document.createElement("ul");
+          participantsList.className = "participants-list";
+
+          details.participants.forEach((email) => {
+            const participantItem = document.createElement("li");
+            const participantEmail = document.createElement("span");
+            participantEmail.className = "participant-email";
+            participantEmail.textContent = email;
+
+            const removeButton = document.createElement("button");
+            removeButton.type = "button";
+            removeButton.className = "remove-participant";
+            removeButton.title = `Cancelar inscrição de ${email}`;
+            removeButton.setAttribute("aria-label", `Cancelar inscrição de ${email} em ${name}`);
+
+            const removeIcon = document.createElement("span");
+            removeIcon.className = "remove-participant-icon";
+            removeIcon.setAttribute("aria-hidden", "true");
+            removeButton.appendChild(removeIcon);
+            removeButton.addEventListener("click", () => {
+              unregisterParticipant(name, email, removeButton);
+            });
+
+            participantItem.append(participantEmail, removeButton);
+            participantsList.appendChild(participantItem);
+          });
+
+          participantsSection.appendChild(participantsList);
+        } else {
+          const emptyMessage = document.createElement("p");
+          emptyMessage.className = "participants-empty";
+          emptyMessage.textContent = "Nenhum participante inscrito.";
+          participantsSection.appendChild(emptyMessage);
+        }
+
+        activityCard.appendChild(participantsSection);
         activitiesList.appendChild(activityCard);
 
         // Add option to select dropdown
@@ -35,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
         option.textContent = name;
         activitySelect.appendChild(option);
       });
+      activitySelect.value = selectedActivity;
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
       console.error("Error fetching activities:", error);
@@ -62,6 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
